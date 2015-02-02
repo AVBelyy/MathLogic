@@ -2,6 +2,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
@@ -16,23 +17,23 @@ import java.io.IOException;
 
 public class Homework5 {
     public static class OpenSet {
-        public List<Pair> bounds;
+        public List<Interval> bounds;
 
         public OpenSet() {
             bounds = new LinkedList<>();
         }
 
-        public OpenSet(List<Pair> bounds) {
+        public OpenSet(List<Interval> bounds) {
             this.bounds = bounds;
         }
 
-        public OpenSet(Pair... bounds) {
+        public OpenSet(Interval... bounds) {
             this.bounds = Arrays.asList(bounds);
         }
 
         public static OpenSet R() {
             OpenSet r = new OpenSet();
-            r.bounds.add(new Pair(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
+            r.bounds.add(new Interval(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
             return r;
         }
 
@@ -41,7 +42,7 @@ public class Homework5 {
                 return "()";
             } else {
                 StringBuilder out = new StringBuilder();
-                for (Pair p : bounds) {
+                for (Interval p : bounds) {
                     out.append(p);
                 }
                 return out.toString().replaceAll("Infinity", "inf");
@@ -49,10 +50,10 @@ public class Homework5 {
         }
 
         public OpenSet cutSinglePoint() {
-            List<Pair> newBounds = new LinkedList<>(bounds);
-            Double upperBound = getUpperBound();
-            Double lowerBound = getLowerBound();
-            Double newPoint = (upperBound + lowerBound) / 2;
+            List<Interval> newBounds = new LinkedList<>(bounds);
+            double upperBound = getUpperBound();
+            double lowerBound = getLowerBound();
+            double newPoint = (upperBound + lowerBound) / 2;
             if (Double.isNaN(newPoint)) {
                 newPoint = 0.0;
             } else if (newPoint == Double.NEGATIVE_INFINITY) {
@@ -61,8 +62,8 @@ public class Homework5 {
                 newPoint = getLowerBound() + 1000.0;
             }
             newBounds.remove(0);
-            newBounds.add(0, new Pair(newPoint, upperBound));
-            newBounds.add(0, new Pair(lowerBound, newPoint));
+            newBounds.add(0, new Interval(newPoint, upperBound));
+            newBounds.add(0, new Interval(lowerBound, newPoint));
             return new OpenSet(newBounds);
         }
 
@@ -79,10 +80,10 @@ public class Homework5 {
             List<OpenSet> sets = new LinkedList<>();
             
             if (getUpperBound() == Double.POSITIVE_INFINITY && getLowerBound() != Double.NEGATIVE_INFINITY) {
-                sets.addAll(new OpenSet(new Pair(newSet.getLowerBound(), newSet.getUpperBound())).cutInParts(n - 1));
-                sets.add(new OpenSet(new Pair(newSet.getUpperBound(), Double.POSITIVE_INFINITY)));
+                sets.addAll(new OpenSet(new Interval(newSet.getLowerBound(), newSet.getUpperBound())).cutInParts(n - 1));
+                sets.add(new OpenSet(new Interval(newSet.getUpperBound(), Double.POSITIVE_INFINITY)));
             } else {
-                sets.add(new OpenSet(new Pair(newSet.getLowerBound(), newSet.getUpperBound())));
+                sets.add(new OpenSet(new Interval(newSet.getLowerBound(), newSet.getUpperBound())));
                 newSet.bounds.remove(0);
                 sets.addAll(newSet.cutInParts(n - 1));
             }
@@ -90,59 +91,122 @@ public class Homework5 {
             return sets;
         }
 
-        public OpenSet union(OpenSet other, boolean closed) {
-            List<Pair> newBounds = new LinkedList<>(bounds);
-            List<Pair> res = new LinkedList<>();
+        public OpenSet union(OpenSet other) {
+            List<Interval> newBounds = new LinkedList<>(bounds);
+            List<Interval> res = new LinkedList<>();
             newBounds.addAll(other.bounds);
             Collections.sort(newBounds);
 
             while (newBounds.size() > 1) {
-                Pair fst = newBounds.get(0);
-                Pair snd = newBounds.get(1);
+                Interval p1 = newBounds.get(0);
+                Interval p2 = newBounds.get(1);
                 newBounds.remove(0);
                 newBounds.remove(0);
-                if ((closed || snd.r < fst.r) && (!closed || snd.r <= fst.r)) {
-                    newBounds.add(0, fst);
-                } else if ((closed || fst.r > snd.l) && (!closed || fst.r >= snd.l)) {
-                    newBounds.add(0, new Pair(fst.l, snd.r));
+                // Some macaroni
+                if (p2.l == p1.l && p2.r == p1.l) {
+                    int fl = Interval.LEFT;
+                    int fr = p1.f & Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p1.r, fl | fr));
+                } else if (p2.l == p1.l && p1.l < p2.r && p2.r < p1.r) {
+                    int fl = (p1.f & Interval.LEFT) | (p2.f & Interval.LEFT);
+                    int fr = p1.f & Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p1.r, fl | fr));
+                } else if (p2.l == p1.l && p2.r == p1.r) {
+                    int fl = (p1.f & Interval.LEFT) | (p2.f & Interval.LEFT);
+                    int fr = (p1.f & Interval.RIGHT) | (p2.f & Interval.RIGHT);
+                    newBounds.add(0, new Interval(p1.l, p1.r, fl | fr));
+                } else if (p2.l == p1.l && p2.r > p1.r) {
+                    int fl = (p1.f & Interval.LEFT) | (p2.f & Interval.LEFT);
+                    int fr = p2.f & Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p2.r, fl | fr));
+                } else if (p1.l < p2.l && p2.l < p1.r && p1.l < p2.r && p2.r < p1.r) {
+                    newBounds.add(0, p1);
+                } else if (p1.l < p2.l && p2.l < p1.r && p2.r == p1.r) {
+                    int fl = p1.f & Interval.LEFT;
+                    int fr = (p1.f & Interval.RIGHT) | (p2.f & Interval.RIGHT);
+                    newBounds.add(0, new Interval(p1.l, p1.r, fl | fr));
+                } else if (p1.l < p2.l && p2.l < p1.r && p2.r > p1.r) {
+                    int fl = p1.f & Interval.LEFT;
+                    int fr = p2.f & Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p2.r, fl | fr));
+                } else if (p2.l == p1.r && p2.r == p1.r) {
+                    int fl = p1.f & Interval.LEFT;
+                    int fr = Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p1.r, fl | fr));
+                } else if (p2.l == p1.r && p2.r > p1.r && (p1.right() || p2.left())) {
+                    int fl = p1.f & Interval.LEFT;
+                    int fr = p2.f & Interval.RIGHT;
+                    newBounds.add(0, new Interval(p1.l, p2.r, fl | fr));
                 } else {
-                    res.add(fst);
-                    newBounds.add(0, snd);
+                    res.add(p1);
+                    newBounds.add(0, p2);
                 }
             }
             res.addAll(newBounds);
             Collections.sort(res);
 
-            return sanitizeSet(new OpenSet(res));
+            return new OpenSet(res);
         }
 
         public OpenSet intersect(OpenSet other) {
-            List<Pair> res = new LinkedList<>();
-            for (Pair p1 : bounds) {
-                for (Pair p2 : other.bounds) {
-                    Double ll = Math.max(p1.l, p2.l);
-                    Double rr = Math.min(p1.r, p2.r);
-                    res.add(new Pair(ll, rr));
+            List<Interval> res = new LinkedList<>();
+            for (Interval p1 : bounds) {
+                for (Interval p2 : other.bounds) {
+                    double ll = Math.max(p1.l, p2.l);
+                    double rr = Math.min(p1.r, p2.r);
+                    int fl, fr;
+
+                    if (p1.l < p2.l) {
+                        fl = p2.f & Interval.LEFT;
+                    } else if (p2.l < p1.l) {
+                        fl = p1.f & Interval.LEFT;
+                    } else {
+                        fl = (p1.f & Interval.LEFT) & (p2.f & Interval.LEFT);
+                    }
+
+                    if (p1.r < p2.r) {
+                        fr = p1.f & Interval.RIGHT;
+                    } else if (p2.r < p1.r) {
+                        fr = p2.f & Interval.RIGHT;
+                    } else {
+                        fr = (p1.f & Interval.RIGHT) & (p2.f & Interval.RIGHT);
+                    }
+
+                    if ((fl != 0 && fr != 0 && ll <= rr) || (ll < rr)) {
+                        res.add(new Interval(ll, rr, fl | fr));
+                    }
                 }
             }
             return new OpenSet(res);
         }
 
-        public OpenSet negate(boolean closed) {
+        public OpenSet negate() {
             if (bounds.size() == 0) {
                 return OpenSet.R();
             } else {
                 OpenSet theRest = new OpenSet(new LinkedList<>(bounds.subList(1, bounds.size())));
-                OpenSet res = new OpenSet(
-                    new Pair(Double.NEGATIVE_INFINITY, getLowerBound()),
-                    new Pair(getUpperBound(), Double.POSITIVE_INFINITY))
-                    .intersect(theRest.negate(false));
-                return closed ? res : sanitizeSet(res);
+                int fl = bounds.get(0).left() ? 0 : Interval.LEFT;
+                int fr = bounds.get(0).right() ? 0 : Interval.RIGHT;
+                OpenSet newSet = new OpenSet();
+                if (getLowerBound() != Double.NEGATIVE_INFINITY) {
+                    newSet.bounds.add(new Interval(Double.NEGATIVE_INFINITY, getLowerBound(), fr));
+                }
+                if (getUpperBound() != Double.POSITIVE_INFINITY) {
+                    newSet.bounds.add(new Interval(getUpperBound(), Double.POSITIVE_INFINITY, fl));
+                }
+                OpenSet res = newSet.intersect(theRest.negate());
+                return res;
             }
         }
 
-        public OpenSet imply(OpenSet other) {
-            return sanitizeSet(negate(true).union(other, true));
+        public OpenSet interior() {
+            List<Interval> newBounds = new LinkedList<>();
+            for (Interval p : bounds) {
+                if (p.l < p.r) {
+                    newBounds.add(p);
+                }
+            }
+            return new OpenSet(newBounds);
         }
 
         private double getLowerBound() {
@@ -153,30 +217,39 @@ public class Homework5 {
             return bounds.get(0).r;
         }
 
-        private static OpenSet sanitizeSet(OpenSet set) {
-            List<Pair> newBounds = new LinkedList<>();
-            for (Pair p : set.bounds) {
-                if (p.l < p.r) {
-                    newBounds.add(p);
-                }
-            }
-            return new OpenSet(newBounds);
-        }
-        
-        private static class Pair implements Comparable<Pair> {
-            Double l;
-            Double r;
+        private static class Interval implements Comparable<Interval> {
+            double l;
+            double r;
 
-            public Pair(Double l, Double r) {
+            int f;
+
+            static int LEFT = 0x1;
+            static int RIGHT = 0x2;
+
+            private static double eps = 1e-6;
+
+            public Interval(double l, double r) {
                 this.l = l;
                 this.r = r;
+                this.f = 0;
+            }
+
+            public Interval(double l, double r, int f) {
+                this.l = l;
+                this.r = r;
+                this.f = f;
             }
 
             @Override
-            public int compareTo(Pair other) {
-                if (l < other.l) {
+            public int compareTo(Interval other) {
+                double l1 = left() ? l : l + eps;
+                double r1 = right() ? r : r - eps;
+                double l2 = other.left() ? other.l : other.l + eps;
+                double r2 = other.right() ? other.r : other.r - eps;
+
+                if (l1 < l2) {
                     return -1;
-                } else if (l == other.l && r < other.r) {
+                } else if (l1 == l2 && r1 < r2) {
                     return -1;
                 } else {
                     return 1;
@@ -184,7 +257,17 @@ public class Homework5 {
             }
 
             public String toString() {
-                return String.format("(%f;%f)", l, r);
+                String lend = left() ? "[" : "(";
+                String rend = right() ? "]" : ")";
+                return String.format("%s%f;%f%s", lend, l, r, rend);
+            }
+
+            public boolean left() {
+                return (f & LEFT) != 0;
+            }
+
+            public boolean right() {
+                return (f & RIGHT) != 0;
             }
         }
     }
@@ -235,7 +318,7 @@ public class Homework5 {
             for (String force : forced) {
                 OpenSet updSet = startSet;
                 if (varSets.containsKey(force)) {
-                    updSet = varSets.get(force).union(startSet, false);
+                    updSet = varSets.get(force).union(startSet);
                 }
                 varSets.put(force, updSet);
             }
@@ -519,7 +602,7 @@ public class Homework5 {
         
         else if (stmt instanceof Negation) {
             Statement notStmt = ((Negation) stmt).child;
-            return evaluateStatement(notStmt, varSets).negate(false);
+            return evaluateStatement(notStmt, varSets).negate().interior();
         }
         
         else if (stmt instanceof Conjunction) {
@@ -531,13 +614,13 @@ public class Homework5 {
         else if (stmt instanceof Disjunction) {
             Statement left = ((Disjunction) stmt).left;
             Statement right = ((Disjunction) stmt).right;
-            return evaluateStatement(left, varSets).union(evaluateStatement(right, varSets), false);
+            return evaluateStatement(left, varSets).union(evaluateStatement(right, varSets));
         }
         
         else if (stmt instanceof Implication) {
             Statement left = ((Implication) stmt).left;
             Statement right = ((Implication) stmt).right;
-            return evaluateStatement(left, varSets).imply(evaluateStatement(right, varSets));
+            return evaluateStatement(left, varSets).negate().union(evaluateStatement(right, varSets)).interior();
         }
 
         else {
@@ -562,6 +645,9 @@ public class Homework5 {
                 kTree.evaluateTree(OpenSet.R(), varSets);
 
                 OpenSet ans = evaluateStatement(toDisprove, varSets);
+                for (Map.Entry<String, OpenSet> entry : varSets.entrySet()) {
+                    System.out.println(entry.getKey() + " = " + entry.getValue());
+                }
                 System.out.println(ans);
             } else {
                 System.out.println("Формула общезначима");
