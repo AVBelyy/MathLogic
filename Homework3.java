@@ -51,7 +51,7 @@ public class Homework3 {
         } catch (AnnotatorException e) {
             System.err.println("Ошибка при аннотации " + e.getStatement() + ": " + e.getMessage());
         } catch (GeneratorException e) {
-            System.out.print("Высказывание ложно при ");
+            System.out.print("Высказывание ложно при");
             for (Entry<String, Boolean> entry : e.getValues().entrySet()) {
                 System.out.print(" " + entry.getKey() + "=" + (entry.getValue() ? "1" : "0"));
             }
