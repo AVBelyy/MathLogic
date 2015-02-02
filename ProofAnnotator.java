@@ -97,10 +97,30 @@ public class ProofAnnotator {
             ctxLines.put(hypStr, lineNo);
         }
 
-        for (int lineNo = 0; lineNo < proof.size(); lineNo++) {
-            AnnotatedStatement annStmt = proof.get(lineNo);
-            Statement stmt = annStmt.statement;
-            String stmtStr = stmt.toPolishString();
+        AnnotatedStatement annStmt = null;
+        Statement stmt = null;
+        String stmtStr = "";
+        int lineNo;
+
+        for (lineNo = 0; lineNo < proof.size(); lineNo++) {
+            if (lineNo > 0) {
+                // add to lines list
+                if (!lines.containsKey(stmtStr)) {
+                    lines.put(stmtStr, lineNo - 1);
+                }
+            }
+
+            annStmt = proof.get(lineNo);
+            stmt = annStmt.statement;
+            stmtStr = stmt.toPolishString();
+
+            boolean isMP = false;
+            // check if an expression is a modus ponens
+            if (betas.containsKey(stmtStr)) {
+                MPPair mp = betas.get(stmtStr);
+                annotatedProof.add(new ModusPonens(stmt, mp.alpha, mp.beta));
+                isMP = true;
+            }
 
             if (stmt instanceof Implication) {
                 // add to potential modus ponens-able list
@@ -125,19 +145,20 @@ public class ProofAnnotator {
                 betas.put(betaStr, new MPPair(lineNo, alphaBetaNo));
                 needAlpha.remove(stmtStr);
             }
-            
-            // add to lines list
-            if (!lines.containsKey(stmtStr)) {
-                lines.put(stmtStr, lineNo);
+
+            if (isMP) {
+                continue;
             }
 
-            // if current line is a hypothesis
-            if (annStmt instanceof Hypothesis) {
+            // check if an expression is a hypothesis
+            if (ctxLines.containsKey(stmtStr)) {
+                annotatedProof.add(new Hypothesis(stmt, ctxLines.get(stmtStr)));
+            } else if (annStmt instanceof Hypothesis) {
                 annotatedProof.add(annStmt);
             } else {
-                // check if a statement is the axiom 1-10
                 boolean isAxiom = false;
 
+                // check if a statement is the axiom 1-10
                 for (int i = 0; i < Helper.axioms.size(); i++) {
                     if (stmt.equals(Helper.axioms.get(i))) {
                         annotatedProof.add(new Axiom(stmt, i));
@@ -151,7 +172,6 @@ public class ProofAnnotator {
                 }
 
                 // check if a statement is the arithmetic axiom 1-8
-
                 for (int i = 0; i < Helper.arithmAxioms.size(); i++) {
                     PatternMatcher patternMatcher = new PatternMatcher(true);
                     patternMatcher.match(Helper.arithmAxioms.get(i), stmt);
@@ -281,16 +301,8 @@ public class ProofAnnotator {
                     }
                 }
 
-                // check if an expression is a modus ponens or hypothesis
-                if (betas.containsKey(stmtStr)) {
-                    MPPair mp = betas.get(stmtStr);
-                    annotatedProof.add(new ModusPonens(stmt, mp.alpha, mp.beta));
-                } else if (ctxLines.containsKey(stmtStr)) {
-                    annotatedProof.add(new Hypothesis(stmt, ctxLines.get(stmtStr)));
-                } else {
-                    // error while annotating
-                    throw new AnnotatorException(stmt, "неизвестное выражение");
-                }
+                // error while annotating
+                throw new AnnotatorException(stmt, "неизвестное выражение");
             }
         }
 
